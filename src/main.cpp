@@ -4,6 +4,7 @@
 #include <BlynkSimpleEsp32_BLE.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
+#include <vector>
 
 #define BLYNK_USE_DIRECT_CONNECT
 #define BLYNK_PRINT Serial
@@ -17,10 +18,11 @@ MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 
 Stepper myStepper(stepsPerRevolution, 4, 18, 19, 21);
 
-BlynkTimer timer1, timer2, timer3;
+BlynkTimer Timer1, Timer2, Timer3;
+
 // You should get Auth Token in the Blynk App.
 // Go to the Project Settings (nut icon).
-bool Kill = false;
+bool Kill, InitSet_Flag = false;
 char auth[] = "_Jo-e2fTo4BuQpLF22Ildt6HIpmblvbo";
 uint8_t SetTemperature = 0;
 uint8_t MotorSpeed = 0;
@@ -62,33 +64,52 @@ void HeaterControl()
   Serial.println("HeaterControl: Test funxtion");
 }
 
+void Checks()
+{
+  if (Blynk.connected() && InitSet_Flag == 0x00)
+  {
+    InitSet_Flag = 0x01;
+    Blynk.virtualWrite(V0, 0);
+    Blynk.virtualWrite(V1, 0);
+    Serial.println("Disabling timer now");
+    Timer1.disable(Timer1.getNumTimers());
+  }
+  else
+    return;
+}
+
 void setup()
 {
+  //FreeRTOS initialization of Core 0 to control the Motor primarily.
+  xTaskCreatePinnedToCore(Task1code, "Task1", 10000, NULL, 1, &Task1, 0);
+
   // Debug console
   Serial.begin(115200);
   Serial.println("Waiting for connections...");
   Blynk.setDeviceName("Wireless System Control");
   Blynk.begin(auth);
-  // timer1.setInterval(1L, MotorControll);
-  timer2.setInterval(500L, TemperatureGet);
-  timer3.setInterval(250L, HeaterControl);
 
-  xTaskCreatePinnedToCore(Task1code, "Task1", 10000, NULL, 1, &Task1, 0);
+  //Blynk timer settings
+  Timer1.setInterval(500L, TemperatureGet);
+  Timer2.setInterval(250L, HeaterControl);
+  Timer3.setInterval(3000L, Checks);
+  InitSet_Flag = 0x00;
   delay(500);
 }
 
 void loop()
 {
   Blynk.run();
-  // timer1.run();
-  timer2.run();
-  timer3.run();
+  Timer1.run();
+  Timer2.run();
+  Timer3.run();
 }
 
 void Task1code(void *parameter)
 {
   while (1)
   {
+ 
     //Serial.print("MotorCode is running on core ");
     //Serial.println(xPortGetCoreID());
     if (MotorSpeed == 0)
@@ -96,7 +117,7 @@ void Task1code(void *parameter)
       myStepper.step(0);
     }
     else
-    { 
+    {
       myStepper.setSpeed(MotorSpeed);
       //Serial.println(MotorSpeed);
       myStepper.step(stepsPerRevolution / 50);
