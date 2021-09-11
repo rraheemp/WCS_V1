@@ -1,8 +1,0 @@
- if (MotorSpeed == 0)
-      myStepper.step(0);
-    else
-    {
-      myStepper.setSpeed(MotorSpeed);
-      //Serial.println(MotorSpeed);
-      myStepper.step(stepsPerRevolution / 50);
-        }
